@@ -109,12 +109,12 @@ def gen_through_output(fn, arg, res, latency, skip=False):
 def module_load_test(fn, name_arg_res_list, skip=False):
     result = []
     if skip:
-        for name, arg_fn, res_fn in name_arg_res_list:
-            _, t = gen_latency(fn, arg_fn(), res_fn(), skip)
+        for name, arg_fn in name_arg_res_list:
+            _, t = gen_latency(fn, arg_fn(), None, skip)
             result.append((name, t))
     else:
-        for name, arg_fn in name_arg_res_list:
-            n, t = gen_latency(fn, arg_fn(), None, skip)
+        for name, arg_fn, res_fn in name_arg_res_list:
+            n, t = gen_latency(fn, arg_fn(), res_fn(), skip)
             result.append((name, n, t))
     return result
 
