@@ -20,13 +20,13 @@ logger.setLevel(logging.INFO)
 logger.addHandler(handler)
 
 
-def _wrapper(fn, res):
+def _wrapper(fn, res, skip=False):
     def fn0(arg):
         start = time.time()
         try:
             res0 = fn(arg)
             latency = time.time() - start
-            if res == res0:
+            if skip or res == res0:
                 success = True
                 error = None
             else:
@@ -40,9 +40,9 @@ def _wrapper(fn, res):
     return fn0
 
 
-def gen_latency(fn, arg, res):
+def gen_latency(fn, arg, res, skip=False):
     ns = int(os.environ.get("LOAD_TEST_TIMES", "32"))
-    fn = _wrapper(fn, res)
+    fn = _wrapper(fn, res, skip)
 
     n, total = 0, 0
     for _ in range(ns):
@@ -55,9 +55,9 @@ def gen_latency(fn, arg, res):
     return n / ns, total / ns
 
 
-def _gen_through_output(fn, arg, res, parallel, ns):
+def _gen_through_output(fn, arg, res, parallel, ns, skip=False):
     ns = parallel * ns
-    fn = _wrapper(fn, res)
+    fn = _wrapper(fn, res, skip)
 
     n, total = 0, 0
     with ThreadPoolExecutor(max_workers=parallel) as executor:
@@ -73,14 +73,14 @@ def _gen_through_output(fn, arg, res, parallel, ns):
     return n / ns, total / ns
 
 
-def gen_through_output(fn, arg, res, latency):
+def gen_through_output(fn, arg, res, latency, skip=False):
     logger.debug("gen through output with latency %s", latency)
 
     logger.debug("gen through output try to find the parallel with phase one")
     parallel = 1
     while True:
         logger.debug("gen through output by parallel %s and ns 2", parallel)
-        _, t = _gen_through_output(fn, arg, res, parallel, 2)
+        _, t = _gen_through_output(fn, arg, res, parallel, 2, skip)
         logger.debug("gen through output by parallel %s and ns 2 with latency %s", parallel, t)
         delta = 2 * latency / parallel
         if t < latency + delta:
@@ -91,7 +91,7 @@ def gen_through_output(fn, arg, res, latency):
     logger.debug("gen through output try to find the parallel with phase two")
     while parallel > 1:
         logger.debug("gen through output by parallel %s and ns 2", parallel)
-        _, t = _gen_through_output(fn, arg, res, parallel, 2)
+        _, t = _gen_through_output(fn, arg, res, parallel, 2, skip)
         logger.debug("gen through output by parallel %s and ns 2 with latency %s", parallel, t)
         delta = latency / parallel
         if t > latency + delta and parallel > 1:
@@ -101,23 +101,27 @@ def gen_through_output(fn, arg, res, latency):
 
     ns = int(os.environ.get("LOAD_TEST_TIMES", "32"))
     logger.debug("gen through output by parallel %s and ns %s", parallel, ns)
-    n, t = _gen_through_output(fn, arg, res, parallel, ns)
+    n, t = _gen_through_output(fn, arg, res, parallel, ns, skip)
     logger.debug("gen through output by parallel %s and ns %s with latency %s", parallel, ns, t)
     return n, parallel
 
 
-def module_load_test(fn, name_arg_res_list):
+def module_load_test(fn, name_arg_res_list, skip=False):
     result = []
-    for name, arg, res in name_arg_res_list:
-        n, t = gen_latency(fn, arg, res)
-        result.append((name, n, t))
+    for name, arg_fn, res_fn in name_arg_res_list:
+        arg = arg_fn()
+        res = res_fn()
+        n, t = gen_latency(fn, arg, res, skip)
+        result.append((name, n, t) if not skip else (name, t))
     return result
 
 
-def service_load_test(fn, name_arg_res_list):
+def service_load_test(fn, name_arg_res_list, skip=False):
     result = []
-    for name, arg, res in name_arg_res_list:
-        n1, t = gen_latency(fn, arg, res)
-        n2, p = gen_through_output(fn, arg, res, t)
-        result.append((name, n1, t, n2, p))
+    for name, arg_fn, res_fn in name_arg_res_list:
+        arg = arg_fn()
+        res = res_fn()
+        n1, t = gen_latency(fn, arg, res, skip)
+        n2, p = gen_through_output(fn, arg, res, t, skip)
+        result.append((name, n1, t, n2, p) if not skip else (name, t, p))
     return result
