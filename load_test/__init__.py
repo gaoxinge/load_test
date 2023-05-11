@@ -108,20 +108,30 @@ def gen_through_output(fn, arg, res, latency, skip=False):
 
 def module_load_test(fn, name_arg_res_list, skip=False):
     result = []
-    for name, arg_fn, res_fn in name_arg_res_list:
-        arg = arg_fn()
-        res = res_fn()
-        n, t = gen_latency(fn, arg, res, skip)
-        result.append((name, n, t) if not skip else (name, t))
+    if skip:
+        for name, arg_fn, res_fn in name_arg_res_list:
+            _, t = gen_latency(fn, arg_fn(), res_fn(), skip)
+            result.append((name, t))
+    else:
+        for name, arg_fn in name_arg_res_list:
+            n, t = gen_latency(fn, arg_fn(), None, skip)
+            result.append((name, n, t))
     return result
 
 
 def service_load_test(fn, name_arg_res_list, skip=False):
     result = []
-    for name, arg_fn, res_fn in name_arg_res_list:
-        arg = arg_fn()
-        res = res_fn()
-        n1, t = gen_latency(fn, arg, res, skip)
-        n2, p = gen_through_output(fn, arg, res, t, skip)
-        result.append((name, n1, t, n2, p) if not skip else (name, t, p))
+    if skip:
+        for name, arg_fn, res_fn in name_arg_res_list:
+            arg = arg_fn()
+            _, t = gen_latency(fn, arg, None, skip)
+            _, p = gen_through_output(fn, arg, None, t, skip)
+            result.append((name, t, p))
+    else:
+        for name, arg_fn, res_fn in name_arg_res_list:
+            arg = arg_fn()
+            res = res_fn()
+            n1, t = gen_latency(fn, arg, res, skip)
+            n2, p = gen_through_output(fn, arg, res, t, skip)
+            result.append((name, n1, t, n2, p))
     return result
